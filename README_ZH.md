@@ -216,7 +216,7 @@ pool.Reboot()
       </td>
       <td align="center" valign="middle">
         <a href="https://matrixorigin.cn/" target="_blank">
-          <img src="https://matrixorigin.cn/_next/static/media/logo-light-zh.a2a8f3c0.svg" width="250" />
+          <img src="https://www.matrixorigin.cn/_next/static/media/logo-light-zh.16ed7ea0.svg" width="250" />
         </a>
       </td>
     </tr>

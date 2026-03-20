@@ -215,7 +215,7 @@ Trusted by the following corporations/organizations.
       </td>
       <td align="center" valign="middle">
         <a href="https://www.matrixorigin.io/" target="_blank">
-          <img src="https://www.matrixorigin.io/_next/static/media/logo-light-en.42553c69.svg" width="250" />
+          <img src="https://www.matrixorigin.io/_next/static/media/logo-light-en.b8e29d17.svg" width="250" />
         </a>
       </td>
     </tr>
