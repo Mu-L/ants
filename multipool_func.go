@@ -24,14 +24,9 @@ package ants
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"math"
-	"strings"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 // MultiPoolWithFunc consists of multiple pools, from which you will benefit the
@@ -173,40 +168,9 @@ func (mp *MultiPoolWithFunc) IsClosed() bool {
 // ReleaseTimeout closes the multi-pool with a timeout,
 // it waits all pools to be closed before timing out.
 func (mp *MultiPoolWithFunc) ReleaseTimeout(timeout time.Duration) error {
-	if !atomic.CompareAndSwapInt32(&mp.state, OPENED, CLOSED) {
-		return ErrPoolClosed
-	}
-
-	errCh := make(chan error, len(mp.pools))
-	var wg errgroup.Group
-	for i, pool := range mp.pools {
-		func(p *PoolWithFunc, idx int) {
-			wg.Go(func() error {
-				err := p.ReleaseTimeout(timeout)
-				if err != nil {
-					err = fmt.Errorf("pool %d: %v", idx, err)
-				}
-				errCh <- err
-				return err
-			})
-		}(pool, i)
-	}
-
-	_ = wg.Wait()
-
-	var errStr strings.Builder
-	for i := 0; i < len(mp.pools); i++ {
-		if err := <-errCh; err != nil {
-			errStr.WriteString(err.Error())
-			errStr.WriteString(" | ")
-		}
-	}
-
-	if errStr.Len() == 0 {
-		return nil
-	}
-
-	return errors.New(strings.TrimSuffix(errStr.String(), " | "))
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return mp.ReleaseContext(ctx)
 }
 
 // ReleaseContext closes the multi-pool with a context,
@@ -216,36 +180,11 @@ func (mp *MultiPoolWithFunc) ReleaseContext(ctx context.Context) error {
 		return ErrPoolClosed
 	}
 
-	errCh := make(chan error, len(mp.pools))
-	var wg errgroup.Group
-	for i, pool := range mp.pools {
-		func(p *PoolWithFunc, idx int) {
-			wg.Go(func() error {
-				err := p.ReleaseContext(ctx)
-				if err != nil {
-					err = fmt.Errorf("pool %d: %v", idx, err)
-				}
-				errCh <- err
-				return err
-			})
-		}(pool, i)
+	pools := make([]contextReleaser, len(mp.pools))
+	for i, p := range mp.pools {
+		pools[i] = p
 	}
-
-	_ = wg.Wait()
-
-	var errStr strings.Builder
-	for i := 0; i < len(mp.pools); i++ {
-		if err := <-errCh; err != nil {
-			errStr.WriteString(err.Error())
-			errStr.WriteString(" | ")
-		}
-	}
-
-	if errStr.Len() == 0 {
-		return nil
-	}
-
-	return errors.New(strings.TrimSuffix(errStr.String(), " | "))
+	return releasePools(ctx, pools)
 }
 
 // Reboot reboots a released multi-pool.
