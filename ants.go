@@ -402,6 +402,15 @@ func (p *poolCommon) Release() {
 	// There might be some callers waiting in retrieveWorker(), so we need to wake them up to prevent
 	// those callers blocking infinitely.
 	p.cond.Broadcast()
+
+	// If there are no running workers at the time of Release, close allDone immediately
+	// so that Reboot() or ReleaseContext() won't block on <-p.allDone indefinitely.
+	// If workers are still running, the last one to exit will close allDone in its defer.
+	if p.Running() == 0 {
+		p.once.Do(func() {
+			close(p.allDone)
+		})
+	}
 }
 
 // ReleaseTimeout is like Release but with a timeout, it waits all workers to exit before timing out.
@@ -438,12 +447,6 @@ func (p *poolCommon) ReleaseContext(ctx context.Context) error {
 		purgeCh = p.allDone
 	}
 
-	if p.Running() == 0 {
-		p.once.Do(func() {
-			close(p.allDone)
-		})
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -469,14 +472,8 @@ func (p *poolCommon) Reboot() {
 		return
 	}
 
-	// Wait for all workers to be fully stopped before resetting the pool,
-	// this prevents data races when Reboot() is called while workers are
-	// still in the process of shutting down.
-	if p.Running() == 0 {
-		p.once.Do(func() {
-			close(p.allDone)
-		})
-	}
+	// Wait for all workers to exit. The allDone channel is closed either
+	// by Release() (if no workers were running) or by the last exiting worker.
 	<-p.allDone
 
 	// Wait for the purge and ticktock goroutines to exit completely,
